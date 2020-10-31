@@ -29,8 +29,13 @@ podop = socketmap:unix:/tmp/podop.socket:
 mydestination =
 
 # Relayhost if any is configured
+{% if RELAYHOST %}
 relayhost = {{ RELAYHOST }}
-{% if RELAYUSER %}
+{% endif %}
+{% if FALLBACK_RELAYHOST %}
+smtp_fallback_relay = {{ FALLBACK_RELAYHOST }}
+{% endif %}
+{% if RELAYUSER or FALLBACK_RELAYUSER %}
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
 smtp_sasl_security_options = noanonymous
