@@ -47,7 +47,15 @@ babel = flask_babel.Babel()
 def get_locale():
     """ selects locale for translation """
     translations = [str(translation) for translation in babel.list_translations()]
-    return flask.request.accept_languages.best_match(translations)
+    flask.session['available_languages'] = translations
+
+    try:
+        language = flask.session['language']
+    except KeyError:
+        language = flask.request.accept_languages.best_match(translations)
+        flask.session['language'] = language
+
+    return language
 
 
 # Proxy fixer

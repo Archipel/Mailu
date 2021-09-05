@@ -32,7 +32,9 @@ DEFAULT_CONFIG = {
     'DOMAIN': 'mailu.io',
     'HOSTNAMES': 'mail.mailu.io,alternative.mailu.io,yetanother.mailu.io',
     'POSTMASTER': 'postmaster',
+    'WILDCARD_SENDERS': '',
     'TLS_FLAVOR': 'cert',
+    'INBOUND_TLS_ENFORCE': False,
     'AUTH_RATELIMIT': '1000/minute;10000/hour',
     'AUTH_RATELIMIT_SUBNET': False,
     'DISABLE_STATISTICS': False,
@@ -45,6 +47,7 @@ DEFAULT_CONFIG = {
     'DKIM_SELECTOR': 'dkim',
     'DKIM_PATH': '/dkim/{domain}.{selector}.key',
     'DEFAULT_QUOTA': 1000000000,
+    'MESSAGE_RATELIMIT': '10000/day',
     # Web settings
     'SITENAME': 'Mailu',
     'WEBSITE': 'https://mailu.io',
@@ -54,11 +57,11 @@ DEFAULT_CONFIG = {
     'RECAPTCHA_PUBLIC_KEY': '',
     'RECAPTCHA_PRIVATE_KEY': '',
     # Advanced settings
-    'PASSWORD_SCHEME': 'PBKDF2',
     'LOG_LEVEL': 'WARNING',
     'SESSION_KEY_BITS': 128,
     'SESSION_LIFETIME': 24,
     'SESSION_COOKIE_SECURE': True,
+    'CREDENTIAL_ROUNDS': 12,
     # Host settings
     'HOST_IMAP': 'imap',
     'HOST_LMTP': 'imap:2525',
@@ -104,6 +107,15 @@ class ConfigManager(dict):
         if self.config["WEBMAIL"] != "none":
             self.config["WEBMAIL_ADDRESS"] = self.get_host_address("WEBMAIL")
 
+    def __get_env(self, key, value):
+        key_file = key + "_FILE"
+        if key_file in os.environ:
+            with open(os.environ.get(key_file)) as file:
+                value_from_file = file.read()
+            return value_from_file.strip()
+        else:
+            return os.environ.get(key, value)
+
     def __coerce_value(self, value):
         if isinstance(value, str) and value.lower() in ('true','yes'):
             return True
@@ -115,7 +127,7 @@ class ConfigManager(dict):
         self.config.update(app.config)
         # get environment variables
         self.config.update({
-            key: self.__coerce_value(os.environ.get(key, value))
+            key: self.__coerce_value(self.__get_env(key, value))
             for key, value in DEFAULT_CONFIG.items()
         })
         self.resolve_hosts()

@@ -3,14 +3,13 @@ Using an external reverse proxy
 
 One of Mailu use cases is as part of a larger services platform, where maybe other Web services are available than Mailu Webmail and admin interface.
 
-In such a configuration, one would usually run a frontend reverse proxy to serve all Web contents based on criteria like the requested hostname (virtual hosts) and/or the requested path. Mailu Web frontend is disabled in the default setup for security reasons, it is however expected that most users will enable it at some point. Also, due to Docker Compose configuration structure, it is impossible for us to make disabling the Web frontend completely available through a configuration variable. This guide was written to help users setup such an architecture.
+In such a configuration, one would usually run a frontend reverse proxy to serve all Web contents based on criteria like the requested hostname (virtual hosts) and/or the requested path. Mailu Admin Web frontend is disabled in the default setup for security reasons, it is however expected that most users will enable it at some point. Also, due to Docker Compose configuration structure, it is impossible for us to make disabling the Web frontend completely available through a configuration variable. This guide was written to help users setup such an architecture.
 
 There are basically three options, from the most to the least recommended one:
 
-- have Mailu Web frontend listen locally and use your own Web frontend on top of it
-- use ``Traefik`` in another container as central system-reverse-proxy
-- override Mailu Web frontend configuration
-- disable Mailu Web frontend completely and use your own
+- `have Mailu Web frontend listen locally and use your own Web frontend on top of it`_
+- `use Traefik in another container as central system-reverse-proxy`_
+- `override Mailu Web frontend configuration`_
 
 All options will require that you modify the ``docker-compose.yml`` file.
 
@@ -89,7 +88,7 @@ Here is an example configuration :
 
   server {
     listen <public_ip>:443;
-    server_name yourpublicname.tld;
+    server_name external.example.com;
     # [...] here goes your standard configuration
 
     location /webmail {
@@ -99,7 +98,7 @@ Here is an example configuration :
 
   server {
     listen <internal_ip>:443;
-    server_name yourinternalname.tld;
+    server_name internal.example.com;
     # [...] here goes your standard configuration
 
     location /admin {
@@ -113,7 +112,7 @@ Depending on how you access the front server, you might want to add a ``proxy_re
 
 .. code-block:: nginx
 
-  proxy_redirect https://localhost https://your-domain.com;
+  proxy_redirect https://localhost https://example.com;
 
 This will stop redirects (301 and 302) sent by the Webmail, nginx front and admin interface from sending you to ``localhost``.
 
@@ -151,19 +150,56 @@ Add the respective Traefik labels for your domain/configuration, like
 
 .. note:: Please don’t forget to add ``TRAEFIK_DOMAIN=[...]`` TO YOUR ``.env``
 
-If your Traefik is configured to automatically request certificates from *letsencrypt*, then you’ll have a certificate for ``mail.your.doma.in`` now. However,
-``mail.your.doma.in`` might only be the location where you want the Mailu web-interfaces to live — your mail should be sent/received from ``your.doma.in``,
+If your Traefik is configured to automatically request certificates from *letsencrypt*, then you’ll have a certificate for ``mail.your.example.com`` now. However,
+``mail.your.example.com`` might only be the location where you want the Mailu web-interfaces to live — your mail should be sent/received from ``your.example.com``,
 and this is the ``DOMAIN`` in your ``.env``?
-To support that use-case, Traefik can request ``SANs`` for your domain. Lets add something like
+To support that use-case, Traefik can request ``SANs`` for your domain. The configuration for this will depend on your Traefik version.
+
+----
+
+Traefik 2.x using labels configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Add the appropriate labels for your domain(s) to the ``front`` container in ``docker-compose.yml``.
+
+.. code-block:: yaml
+
+  services:
+    front:
+      labels:
+        # Enable TLS
+        - "traefik.http.routers.mailu-secure.tls"
+        # Your main domain
+        - "traefik.http.routers.mailu-secure.tls.domains[0].main=your.example.com"
+        # Optional SANs for your main domain
+        - "traefik.http.routers.mailu-secure.tls.domains[0].sans=mail.your.example.com,webmail.your.example.com,smtp.your.example.com"
+        # Optionally add other domains
+        - "traefik.http.routers.mailu-secure.tls.domains[1].main=mail.other.example.com"
+        - "traefik.http.routers.mailu-secure.tls.domains[1].sans=mail2.other.example.com,mail3.other.example.com"
+        # Your ACME certificate resolver
+        - "traefik.http.routers.mailu-secure.tls.certResolver=foo"
+
+Of course, be sure to define the Certificate Resolver ``foo`` in the static configuration as well.
+
+Alternatively, you can define SANs in the Traefik static configuration using routers, or in the static configuration using entrypoints. Refer to the Traefik documentation for more details.
+
+Traefik 1.x with TOML configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Lets add something like
 
 .. code-block:: yaml
 
   [acme]
     [[acme.domains]]
-      main = "your.doma.in" # this is the same as $TRAEFIK_DOMAIN!
-      sans = ["mail.your.doma.in", "webmail.your.doma.in", "smtp.your.doma.in"]
+      main = "your.example.com" # this is the same as $TRAEFIK_DOMAIN!
+      sans = ["mail.your.example.com", "webmail.your.example.com", "smtp.your.example.com"]
 
-to your ``traefik.toml``. You might need to clear your ``acme.json``, if a certificate for one of these domains already exists.
+to your ``traefik.toml``.
+
+----
+
+You might need to clear your ``acme.json``, if a certificate for one of these domains already exists.
 
 You will need some solution which dumps the certificates in ``acme.json``, so you can include them in the ``mailu/front`` container.
 One such example is ``mailu/traefik-certdumper``, which has been adapted for use in Mailu. You can add it to your ``docker-compose.yml`` like:
@@ -222,9 +258,7 @@ You can also download the example configuration files:
 - :download:`compose/traefik/docker-compose.yml`
 - :download:`compose/traefik/traefik.toml`
 
-Disable completely Mailu reverse proxy
---------------------------------------
+.. _have Mailu Web frontend listen locally and use your own Web frontend on top of it: #have-mailu-web-frontend-listen-locally
+.. _use Traefik in another container as central system-reverse-proxy: #traefik-as-reverse-proxy
+.. _override Mailu Web frontend configuration: #override-mailu-configuration
 
-You must not disable Mailu reverse proxy by removing the ``front`` section from the ``docker-compose.yml``.
-
-``front`` is handling authentication and is also proxying e.g. SMTP and IMAP. A basic HTTP reverse proxy as described in this document is not sufficient for this.

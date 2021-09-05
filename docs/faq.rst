@@ -61,7 +61,7 @@ have to prevent pushing out something quickly.
 We currently maintain a strict work flow:
 
 #. Someone writes a solution and sends a pull request;
-#. We use Travis-CI for some very basic building and testing;
+#. We use Github actions for some very basic building and testing;
 #. The pull request needs to be code-reviewed and tested by at least two members
    from the contributors team.
   
@@ -266,6 +266,8 @@ correct syntax. The following file names will be taken as override configuration
 - `Dovecot`_ - ``dovecot.conf`` in dovecot sub-directory;
 - `Nginx`_ - All ``*.conf`` files in the ``nginx`` sub-directory;
 - `Rspamd`_ - All files in the ``rspamd`` sub-directory.
+
+To override the root location (``/``) in Nginx ``WEBROOT_REDIRECT`` needs to be set to ``none`` in the env file (see :ref:`web settings <web_settings>`).
 
 *Issue reference:* `206`_, `1368`_.
 
@@ -533,25 +535,42 @@ The above will block flagged IPs for a week, you can of course change it to you 
   
   actionstart = iptables -N f2b-bad-auth
                 iptables -A f2b-bad-auth -j RETURN
-                iptables -I FORWARD -p tcp -m multiport --dports 1:1024 -j f2b-bad-auth
+                iptables -I DOCKER-USER -p tcp -m multiport --dports 1:1024 -j f2b-bad-auth
   
-  actionstop = iptables -D FORWARD -p tcp -m multiport --dports 1:1024 -j f2b-bad-auth
+  actionstop = iptables -D DOCKER-USER -p tcp -m multiport --dports 1:1024 -j f2b-bad-auth
                iptables -F f2b-bad-auth
                iptables -X f2b-bad-auth
   
-  actioncheck = iptables -n -L FORWARD | grep -q 'f2b-bad-auth[ \t]'
+  actioncheck = iptables -n -L DOCKER-USER | grep -q 'f2b-bad-auth[ \t]'
   
   actionban = iptables -I f2b-bad-auth 1 -s <ip> -j DROP
   
   actionunban = iptables -D f2b-bad-auth -s <ip> -j DROP
 
-5. Restart Fail2Ban
+Using DOCKER-USER chain ensures that the blocked IPs are processed in the correct order with Docker. See more in: https://docs.docker.com/network/iptables/
+
+5. Configure and restart the Fail2Ban service
+
+Make sure Fail2Ban is started after the Docker service by adding a partial override which appends this to the existing configuration.
+
+.. code-block:: bash
+
+  sudo systemctl edit fail2ban
+
+Add the override and save the file.
+
+.. code-block:: bash
+
+  [Unit]
+  After=docker.service
+
+Restart the Fail2Ban service.
 
 .. code-block:: bash
 
   sudo systemctl restart fail2ban
 
-*Issue reference:* `85`_, `116`_, `171`_, `584`_, `592`_, `1727`_
+*Issue reference:* `85`_, `116`_, `171`_, `584`_, `592`_, `1727`_.
 
 Users can't change their password from webmail
 ``````````````````````````````````````````````
@@ -676,7 +695,6 @@ iptables -t nat -A POSTROUTING -o eth0 -p tcp --dport 25 -j SNAT --to <your mx i
 .. _`unbound`: https://nlnetlabs.nl/projects/unbound/about/
 .. _`1438`: https://github.com/Mailu/Mailu/issues/1438
 .. _`1727`: https://github.com/Mailu/Mailu/issues/1727
-
 
 A user gets ``Sender address rejected: Access denied. Please check the`` ``message recipient […] and try again`` even though the sender is legitimate?
 ``````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````

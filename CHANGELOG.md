@@ -97,7 +97,7 @@ configuration and upgrade your mailu.env.
 
 If you run the PostgreSQL server, the database was upgrade, so you will need to
 dump the database before upgrading and load the dump after the upgrade is
-complete. Please not that the shipped image for PostgreSQL database will be
+complete. Please note that the shipped image for PostgreSQL database will be
 deprecated before 1.8.0, you can switch to an external database server by then.
 
 - Deprecation: using the internal postgres image will be deprecated by 1.8.0
