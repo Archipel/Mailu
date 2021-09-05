@@ -129,7 +129,7 @@ So when you have something like this:
 - The admin interface generates ``MX`` and ``SPF`` examples which point to the first entry of ``HOSTNAMES`` but these are only examples.
   You can modify them to use any other ``HOSTNAMES`` entry.
 
-You're mail service will be reachable for IMAP, POP3, SMTP and Webmail at the addresses:
+Your mail service will be reachable for IMAP, POP3, SMTP and Webmail at the addresses:
 
 - mail.example.com
 - mail.foo.com
@@ -257,7 +257,12 @@ Postfix, Dovecot, Nginx and Rspamd support overriding configuration files. Overr
 ``$ROOT/overrides``. Please refer to the official documentation of those programs for the
 correct syntax. The following file names will be taken as override configuration:
 
-- `Postfix`_ - ``postfix.cf`` in postfix sub-directory;
+- `Postfix`_ :
+   - ``main.cf`` as ``$ROOT/overrides/postfix/postfix.cf``
+   - ``master.cf`` as ``$ROOT/overrides/postfix/postfix.master``
+   - All ``$ROOT/overrides/postfix/*.map`` files
+   - For both ``postfix.cf`` and ``postfix.master``, you need to put one configuration per line, as they are fed line-by-line
+     to postfix.
 - `Dovecot`_ - ``dovecot.conf`` in dovecot sub-directory;
 - `Nginx`_ - All ``*.conf`` files in the ``nginx`` sub-directory;
 - `Rspamd`_ - All files in the ``rspamd`` sub-directory.
@@ -492,6 +497,8 @@ follow these steps:
 
   logging:
     driver: journald
+    options:
+      tag: mailu-front
 
 2. Add the /etc/fail2ban/filter.d/bad-auth.conf
 
@@ -501,6 +508,7 @@ follow these steps:
   [Definition]
   failregex = .* client login failed: .+ client:\ <HOST>
   ignoreregex =
+  journalmatch = CONTAINER_TAG=mailu-front
 
 3. Add the /etc/fail2ban/jail.d/bad-auth.conf
 
@@ -508,8 +516,8 @@ follow these steps:
 
   [bad-auth]
   enabled = true
+  backend = systemd
   filter = bad-auth
-  logpath = /var/log/messages
   bantime = 604800
   findtime = 300
   maxretry = 10
@@ -543,7 +551,7 @@ The above will block flagged IPs for a week, you can of course change it to you 
 
   sudo systemctl restart fail2ban
 
-*Issue reference:* `85`_, `116`_, `171`_, `584`_, `592`_.
+*Issue reference:* `85`_, `116`_, `171`_, `584`_, `592`_, `1727`_
 
 Users can't change their password from webmail
 ``````````````````````````````````````````````
@@ -667,6 +675,7 @@ iptables -t nat -A POSTROUTING -o eth0 -p tcp --dport 25 -j SNAT --to <your mx i
 .. _`1090`: https://github.com/Mailu/Mailu/issues/1090
 .. _`unbound`: https://nlnetlabs.nl/projects/unbound/about/
 .. _`1438`: https://github.com/Mailu/Mailu/issues/1438
+.. _`1727`: https://github.com/Mailu/Mailu/issues/1727
 
 
 A user gets ``Sender address rejected: Access denied. Please check the`` ``message recipient […] and try again`` even though the sender is legitimate?

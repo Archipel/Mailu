@@ -41,7 +41,7 @@ The ``AUTH_RATELIMIT`` holds a security setting for fighting attackers that
 try to guess user passwords. The value is the limit of failed authentication attempts
 that a single IP address can perform against IMAP, POP and SMTP authentication endpoints.
 
-If ``AUTH_RATELIMIT_SUBNET`` is ``True`` (which is the default), the ``AUTH_RATELIMIT``
+If ``AUTH_RATELIMIT_SUBNET`` is ``True`` (default: False), the ``AUTH_RATELIMIT``
 rules does also apply to auth requests coming from ``SUBNET``, especially for the webmail.
 If you disable this, ensure that the rate limit on the webmail is enforced in a different
 way (e.g. roundcube plug-in), otherwise an attacker can simply bypass the limit using webmail.
@@ -141,6 +141,10 @@ Advanced settings
 The ``PASSWORD_SCHEME`` is the password encryption scheme. You should use the
 default value, unless you are importing password from a separate system and
 want to keep using the old password encryption scheme.
+
+The ``SESSION_COOKIE_SECURE`` (default: True) setting controls the secure flag on the cookies of the administrative interface. It should only be turned off if you intend to access it over plain HTTP.
+
+``SESSION_LIFETIME`` (default: 24) is the length in hours a session is valid for on the administrative interface.
 
 The ``LOG_LEVEL`` setting is used by the python start-up scripts as a logging threshold.
 Log messages equal or higher than this priority will be printed.
