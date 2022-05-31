@@ -35,7 +35,7 @@ relayhost = {{ RELAYHOST }}
 {% if FALLBACK_RELAYHOST %}
 smtp_fallback_relay = {{ FALLBACK_RELAYHOST }}
 {% endif %}
-{% if RELAYUSER or FALLBACK_RELAYUSER %}
+{% if RELAYUSER or FALLBACK_RELAYUSER or FALLBACK_RELAYHOST_SASL %}
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd
 smtp_sasl_security_options = noanonymous, noplaintext
