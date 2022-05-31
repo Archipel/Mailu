@@ -39,14 +39,25 @@ address.
 
 The ``WILDCARD_SENDERS`` setting is a comma delimited list of user email addresses that are allowed to send emails from any existing address (spoofing the sender).
 
-The ``AUTH_RATELIMIT`` holds a security setting for fighting attackers that
-try to guess user passwords. The value is the limit of failed authentication attempts
-that a single IP address can perform against IMAP, POP and SMTP authentication endpoints.
+The ``AUTH_RATELIMIT_IP`` (default: 60/hour) holds a security setting for fighting
+attackers that waste server resources by trying to guess user passwords (typically
+using a password spraying attack). The value defines the limit of authentication
+attempts that will be processed on non-existing accounts for a specific IP subnet
+(as defined in ``AUTH_RATELIMIT_IP_V4_MASK`` and ``AUTH_RATELIMIT_IP_V6_MASK`` below).
 
-If ``AUTH_RATELIMIT_SUBNET`` is ``True`` (default: False), the ``AUTH_RATELIMIT``
-rules does also apply to auth requests coming from ``SUBNET``, especially for the webmail.
-If you disable this, ensure that the rate limit on the webmail is enforced in a different
-way (e.g. roundcube plug-in), otherwise an attacker can simply bypass the limit using webmail.
+The ``AUTH_RATELIMIT_USER`` (default: 100/day) holds a security setting for fighting
+attackers that attempt to guess a user's password (typically using a password
+bruteforce attack). The value defines the limit of authentication attempts allowed
+for any given account within a specific timeframe.
+
+The ``AUTH_RATELIMIT_EXEMPTION_LENGTH`` (default: 86400) is the number of seconds
+after a successful login for which a specific IP address is exempted from rate limits.
+This ensures that users behind a NAT don't get locked out when a single client is
+misconfigured... but also potentially allow for users to attack each-other.
+
+The ``AUTH_RATELIMIT_EXEMPTION`` (default: '') is a comma separated list of network
+CIDRs that won't be subject to any form of rate limiting. Specifying ``0.0.0.0/0, ::/0``
+there is a good way to disable rate limiting altogether.
 
 The ``TLS_FLAVOR`` sets how Mailu handles TLS connections. Setting this value to
 ``notls`` will cause Mailu not to server any web content! More on :ref:`tls_flavor`.
@@ -58,22 +69,28 @@ The ``MESSAGE_SIZE_LIMIT`` is the maximum size of a single email. It should not
 be too low to avoid dropping legitimate emails and should not be too high to
 avoid filling the disks with large junk emails.
 
-The ``MESSAGE_RATELIMIT`` is the limit of messages a single user can send. This is
-meant to fight outbound spam in case of compromised or malicious account on the
-server.
+The ``MESSAGE_RATELIMIT`` (default: 200/day) is the maximum number of messages
+a single user can send. ``MESSAGE_RATELIMIT_EXEMPTION`` contains a comma delimited
+list of user email addresses that are exempted from any restriction.  Those
+settings are meant to reduce outbound spam in case of compromised or malicious
+account on the server.
 
-The ``RELAYNETS`` are network addresses for which mail is relayed for free with
-no authentication required. This should be used with great care. If you want other
-Docker services' outbound mail to be relayed, you can set this to ``172.16.0.0/12``
-to include **all** Docker networks. The default is to leave this empty.
+The ``RELAYNETS`` (default: unset) is a comma delimited list of network addresses
+for which mail is relayed for with no authentication required. This should be
+used with great care as misconfigurations may turn your Mailu instance into an
+open-relay!
 
-The ``RELAYHOST`` is an optional address of a mail server relaying all outgoing
-mail in following format: ``[HOST]:PORT``.
-``RELAYUSER`` and ``RELAYPASSWORD`` can be used when authentication is needed.
+The ``RELAYHOST`` is an optional address to use as a smarthost for all outgoing
+mail in following format: ``[HOST]:PORT``. ``RELAYUSER`` and ``RELAYPASSWORD``
+can be used when authentication is required.
 
 By default postfix uses "opportunistic TLS" for outbound mail. This can be changed
-by setting ``OUTBOUND_TLS_LEVEL`` to ``encrypt`` or ``secure``. This setting is highly recommended
-if you are using a relayhost that supports TLS.
+by setting ``OUTBOUND_TLS_LEVEL`` to ``encrypt`` or ``secure``. This setting is
+highly recommended if you are using a relayhost that supports TLS but discouraged
+otherwise. ``DEFER_ON_TLS_ERROR`` (default: True) controls whether incomplete
+policies (DANE without DNSSEC or "testing" MTA-STS policies) will be taken into
+account and whether emails will be defered if the additional checks enforced by
+those policies fail.
 
 Similarily by default nginx uses "opportunistic TLS" for inbound mail. This can be changed
 by setting ``INBOUND_TLS_ENFORCE`` to ``True``. Please note that this is forbidden for
@@ -89,9 +106,10 @@ go and fetch new email if available. Do not use too short delays if you do not
 want to be blacklisted by external services, but not too long delays if you
 want to receive your email in time.
 
-The ``RECIPIENT_DELIMITER`` is a character used to delimit localpart from a
-custom address part. For instance, if set to ``+``, users can use addresses
-like ``localpart+custom@domain.tld`` to deliver mail to ``localpart@domain.tld``.
+The ``RECIPIENT_DELIMITER`` is a list of characters used to delimit localpart
+from a custom address part. For instance, if set to ``+-``, users can use
+addresses like ``localpart+custom@example.com`` or ``localpart-custom@example.com``
+to deliver mail to ``localpart@example.com``.
 This is useful to provide external parties with different email addresses and
 later classify incoming mail based on the custom part.
 
@@ -106,12 +124,12 @@ Full-text search is enabled for IMAP is enabled by default. This feature can be 
 Web settings
 ------------
 
-- ``WEB_ADMIN`` contains the path to the main admin interface 
+- ``WEB_ADMIN`` contains the path to the main admin interface
 
 - ``WEB_WEBMAIL`` contains the path to the Web email client.
 
 - ``WEBROOT_REDIRECT`` redirects all non-found queries to the set path.
-  An empty ``WEBROOT_REDIRECT`` value disables redirecting and enables classic behavior of a 404 result when not found. 
+  An empty ``WEBROOT_REDIRECT`` value disables redirecting and enables classic behavior of a 404 result when not found.
   Alternatively, ``WEBROOT_REDIRECT`` can be set to ``none`` if you are using an Nginx override for ``location /``.
 
 All three options need a leading slash (``/``) to work.
@@ -124,6 +142,13 @@ Both ``SITENAME`` and ``WEBSITE`` are customization options for the panel menu
 in the admin interface, while ``SITENAME`` is a customization option for
 every Web interface.
 
+- ``LOGO_BACKGROUND`` sets a custom background colour for the brand logo in the topleft of the main admin interface.
+  For a list of colour codes refer to this page of `w3schools`_.
+
+- ``LOGO_URL`` sets a URL for a custom logo. This logo replaces the Mailu logo in the topleft of the main admin interface.
+
+.. _`w3schools`: https://www.w3schools.com/cssref/css_colors.asp
+
 .. _admin_account:
 
 Admin account - automatic creation
@@ -134,18 +159,25 @@ To create it manually, follow the specific deployment method documentation.
 
 To have the account created automatically, you just need to define a few environment variables:
 
+- ``INITIAL_ADMIN_ACCOUNT``: the admin username: The first part of the e-mail address before the @.
+- ``INITIAL_ADMIN_DOMAIN``: the domain appendix: Most probably identical to the ``DOMAIN`` variable.
+- ``INITIAL_ADMIN_PW``: the admin password.
+- ``INITIAL_ADMIN_MODE``: use one of the options below for configuring how the admin account must be created:
+  
+  - ``create``: (default) creates a new admin account and raises an exception when it already exists.
+  - ``ifmissing``: creates a new admin account when the admin account does not exist.
+  - ``update``: creates a new admin account when it does not exist, or update the password of an existing admin account.
+
+Note: It is recommended to set ``INITIAL_ADMIN_MODE`` to either ``update`` or ``ifmissing``. Leaving it with the default value will cause an error when the system is restarted.
+
+An example:
+
 .. code-block:: bash
 
-  INITIAL_ADMIN_ACCOUNT = ``root`` The first part of the e-mail address (ROOT@example.com)
-  INITIAL_ADMIN_DOMAIN = ``example.com`` the domain appendix. Most probably identical to the DOMAIN variable
-  INITIAL_ADMIN_PW = ``password`` the chosen password for the user
-
-Also, environment variable ``INITIAL_ADMIN_MODE`` defines how the code should behave when it will
-try to create the admin user:
-
-- ``create`` (default) Will try to create user and will raise an exception if present
-- ``ifmissing``: if user exists, nothing happens, else it will be created
-- ``update``: user is created or, if it exists, its password gets updated
+  INITIAL_ADMIN_ACCOUNT=me
+  INITIAL_ADMIN_DOMAIN=example.net
+  INITIAL_ADMIN_PW=password
+  INITIAL_ADMIN_MODE=ifmissing
 
 Depending on your particular deployment you most probably will want to change the default.
 
@@ -156,7 +188,7 @@ The ``CREDENTIAL_ROUNDS`` (default: 12) setting is the number of rounds used by 
 
 The ``SESSION_COOKIE_SECURE`` (default: True) setting controls the secure flag on the cookies of the administrative interface. It should only be turned off if you intend to access it over plain HTTP.
 
-``SESSION_LIFETIME`` (default: 24) is the length in hours a session is valid for on the administrative interface.
+``SESSION_TIMEOUT`` (default: 3600) is the maximum amount of time in seconds between requests before a session is invalidated. ``PERMANENT_SESSION_LIFETIME`` (default: 108000) is the maximum amount of time in seconds a session can be kept alive for if it hasn't timed-out.
 
 The ``SESSION_COOKIE_SECURE`` (default: True) setting controls the secure flag on the cookies of the administrative interface. It should only be turned off if you intend to access it over plain HTTP.
 
@@ -173,7 +205,13 @@ The ``LETSENCRYPT_SHORTCHAIN`` (default: False) setting controls whether we send
 
 .. _`android handsets older than 7.1.1`: https://community.letsencrypt.org/t/production-chain-changes/150739
 
-The ``REAL_IP_HEADER`` (default: unset) and ``REAL_IP_FROM`` (default: unset) settings controls whether HTTP headers such as ``X-Forwarded-For`` or ``X-Real-IP`` should be trusted. The former should be the name of the HTTP header to extract the client IP address from and the later a comma separated list of IP addresses designing which proxies to trust. If you are using Mailu behind a reverse proxy, you should set both. Setting the former without the later introduces a security vulnerability allowing a potential attacker to spoof his source address.
+.. _reverse_proxy_headers:
+
+The ``REAL_IP_HEADER`` (default: unset) and ``REAL_IP_FROM`` (default: unset) settings controls whether HTTP headers such as ``X-Forwarded-For`` or ``X-Real-IP`` should be trusted. The former should be the name of the HTTP header to extract the client IP address from and the later a comma separated list of IP addresses designating which proxies to trust. If you are using Mailu behind a reverse proxy, you should set both. Setting the former without the later introduces a security vulnerability allowing a potential attacker to spoof his source address.
+
+The ``TZ`` sets the timezone Mailu will use. The timezone naming convention usually uses a ``Region/City`` format. See `TZ database name`_  for a list of valid timezones This defaults to ``Etc/UTC``. Warning: if you are observing different timestamps in your log files you should change your hosts timezone to UTC instead of changing TZ to your local timezone. Using UTC allows easy log correlation with remote MTAs.
+
+.. _`TZ database name`: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
 Antivirus settings
 ------------------
@@ -212,6 +250,8 @@ resolved. This can be used to rely on DNS based service discovery with changing 
 When using ``*_ADDRESS``, the hostnames must be full-qualified hostnames. Otherwise nginx will not be able to
 resolve the hostnames.
 
+.. _db_settings:
+
 Database settings
 -----------------
 
@@ -219,8 +259,7 @@ Database settings
 The admin service stores configurations in a database.
 
 - ``DB_FLAVOR``: the database type for mailu admin service. (``sqlite``, ``postgresql``, ``mysql``)
-- ``DB_HOST``: the database host for mailu admin service. (when not ``sqlite``)
-- ``DB_PORT``: the database port for mailu admin service. (when not ``sqlite``)
+- ``DB_HOST``: the database host for mailu admin service. For non-default ports use the notation `host:port`. (when not ``sqlite``)
 - ``DB_PW``: the database password for mailu admin service. (when not ``sqlite``)
 - ``DB_USER``: the database user for mailu admin service. (when not ``sqlite``)
 - ``DB_NAME``: the database name for mailu admin service. (when not ``sqlite``)
@@ -228,8 +267,65 @@ The admin service stores configurations in a database.
 The roundcube service stores configurations in a database.
 
 - ``ROUNDCUBE_DB_FLAVOR``: the database type for roundcube service. (``sqlite``, ``postgresql``, ``mysql``)
-- ``ROUNDCUBE_DB_HOST``: the database host for roundcube service. (when not ``sqlite``)
-- ``ROUNDCUBE_DB_PORT``: the database port for roundcube service. (when not ``sqlite``)
+- ``ROUNDCUBE_DB_HOST``: the database host for roundcube service. For non-default ports use the notation `host:port`. (when not ``sqlite``)
 - ``ROUNDCUBE_DB_PW``: the database password for roundcube service. (when not ``sqlite``)
 - ``ROUNDCUBE_DB_USER``: the database user for roundcube service. (when not ``sqlite``)
 - ``ROUNDCUBE_DB_NAME``: the database name for roundcube service. (when not ``sqlite``)
+
+Webmail settings
+----------------
+
+When using roundcube it is possible to select the plugins to be enabled by setting ``ROUNDCUBE_PLUGINS`` to
+a comma separated list of plugin-names. Included plugins are:
+
+- acl (needs configuration)
+- additional_message_headers (needs configuration)
+- archive
+- attachment_reminder
+- carddav
+- database_attachmentsi
+- debug_logger
+- emoticons
+- enigma
+- help
+- hide_blockquote
+- identicon
+- identity_select
+- jqueryui
+- mailu
+- managesieve
+- markasjunk
+- new_user_dialog
+- newmail_notifier
+- reconnect
+- show_additional_headers (needs configuration)
+- subscriptions_option
+- vcard_attachments
+- zipdownload
+
+If ``ROUNDCUBE_PLUGINS`` is not set the following plugins are enabled by default:
+
+- archive
+- carddav
+- enigma
+- mailu
+- managesieve
+- markasjunk
+- zipdownload
+
+To disable all plugins just set ``ROUNDCUBE_PLUGINS`` to ``mailu``.
+
+To configure a plugin add php files named ``*.inc`` to roundcube's :ref:`override section <override-label>`.
+
+Mail log settings
+-----------------
+
+By default, all services log directly to stdout/stderr. Logs can be collected by any docker log processing solution.
+
+Postfix writes the logs to a syslog server which logs to stdout. This is used to filter out messages from the healthcheck.
+In some situations, a separate mail log is required (e.g. for legal reasons). The syslog server can be configured to write log files to a volume. It can be configured with the following option:
+
+- ``POSTFIX_LOG_FILE``: The file to log the mail log to. When enabled, the syslog server will also log to stdout.
+
+When ``POSTFIX_LOG_FILE`` is enabled, the logrotate program will automatically rotate the logs every week and keep 52 logs.
+To override the logrotate configuration, create the file logrotate.conf with the desired configuration in the :ref:`Postfix overrides folder<override-label>`.

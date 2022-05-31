@@ -2,11 +2,16 @@ ARG ARCH=""
 
 # NOTE: only add file if building for arm
 FROM ${ARCH}alpine:3.14
+ARG VERSION
 ONBUILD COPY --from=balenalib/rpi-alpine:3.14 /usr/bin/qemu-arm-static /usr/bin/qemu-arm-static
+
+ENV TZ Etc/UTC
+
+LABEL version=$VERSION
 
 # Shared later between dovecot postfix nginx rspamd rainloop and roundloop
 RUN apk add --no-cache \
-    python3 py3-pip \
+    python3 py3-pip tzdata \
  && pip3 install socrate==0.2.0
 
 #  https://www.rainloop.net/docs/system-requirements/
@@ -27,14 +32,15 @@ RUN apk add --no-cache \
 #     php7-pdo_sqlite Access to SQLite 3 databases
 RUN apk add --no-cache \
     nginx \
-    php7 php7-fpm php7-curl php7-iconv php7-json php7-xml php7-dom php7-openssl php7-pdo php7-pdo_sqlite \
+    php7 php7-fpm php7-curl php7-iconv php7-json php7-xml php7-simplexml php7-dom php7-openssl php7-pdo php7-pdo_sqlite \
  && rm /etc/nginx/http.d/default.conf \
  && rm /etc/php7/php-fpm.d/www.conf \
  && mkdir -p /run/nginx \
- && mkdir -p /var/www/rainloop
+ && mkdir -p /var/www/rainloop \
+ && mkdir -p /config
 
 # nginx / PHP config files
-COPY config/nginx-rainloop.conf /etc/nginx/http.d/rainloop.conf
+COPY config/nginx-rainloop.conf /config/nginx-rainloop.conf
 COPY config/php-rainloop.conf /etc/php7/php-fpm.d/rainloop.conf
 
 # Rainloop login
@@ -62,10 +68,12 @@ RUN apk add --no-cache \
  && apk del unzip
 
 COPY start.py /start.py
+COPY config.py /config.py
 
 EXPOSE 80/tcp
 VOLUME ["/data"]
 
-CMD php-fpm7 && /start.py
+CMD /start.py
 
 HEALTHCHECK CMD curl -f -L http://localhost/ || exit 1
+RUN echo $VERSION >> /version

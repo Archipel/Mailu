@@ -1,19 +1,14 @@
-ARG DISTRO=alpine:3.14
-FROM $DISTRO as builder
-WORKDIR /tmp
-RUN apk add git build-base automake autoconf libtool dovecot-dev xapian-core-dev icu-dev
-RUN git clone https://github.com/grosjo/fts-xapian.git \
-  && cd fts-xapian \
-  && git checkout 1.2.7 \
-  && autoreconf -vi \
-  && PANDOC=false ./configure --with-dovecot=/usr/lib/dovecot \
-  && make \
-  && make install
+ARG DISTRO=alpine:3.14.5
 
 FROM $DISTRO
+ARG VERSION
+ENV TZ Etc/UTC
+
+LABEL version=$VERSION
+
 # python3 shared with most images
 RUN apk add --no-cache \
-    curl python3 py3-pip git bash py3-multidict py3-yarl \
+    python3 py3-pip git bash py3-multidict py3-yarl tzdata curl sshfs \
   && pip3 install --upgrade pip
 
 # Shared layer between nginx, dovecot, postfix, postgresql, rspamd, unbound, rainloop, roundcube
@@ -24,10 +19,8 @@ RUN pip3 install "podop>0.2.5"
 
 # Image specific layers under this line
 RUN apk add --no-cache \
-  dovecot dovecot-lmtpd dovecot-pop3d dovecot-submissiond dovecot-pigeonhole-plugin rspamd-client xapian-core \
+  dovecot dovecot-lmtpd dovecot-pop3d dovecot-submissiond dovecot-pigeonhole-plugin rspamd-client xapian-core dovecot-fts-xapian \
   && mkdir /var/lib/dovecot
-
-COPY --from=builder /usr/lib/dovecot/lib21_fts_xapian_plugin.* /usr/lib/dovecot/
 
 COPY conf /conf
 COPY start.py /start.py
@@ -38,3 +31,4 @@ VOLUME ["/mail"]
 CMD /start.py
 
 HEALTHCHECK --start-period=350s CMD echo QUIT|nc localhost 110|grep "Dovecot ready."
+RUN echo $VERSION >> /version

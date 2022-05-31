@@ -27,7 +27,7 @@ pull_request_rules:
 
   - name: Trusted author and 1 approved review; trigger bors r+
     conditions:
-      - author~=^(mergify|kaiyou|muhlemmer|mildred|HorayNarea|hoellen|ofthesun9|Nebukadneza|micw|lub|Diman0|3-w-c|decentral1se|ghostwheel42|nextgens|parisni)$
+      - author~=^(mergify|kaiyou|muhlemmer|mildred|HorayNarea|hoellen|ofthesun9|Nebukadneza|micw|lub|Diman0|ghostwheel42|nextgens)$
       - -title~=(WIP|wip)
       - -label~=^(status/wip|status/blocked|review/need2)$
       - "#approved-reviews-by>=1"
@@ -35,18 +35,18 @@ pull_request_rules:
       comment:
         message: bors r+
 
-  - name: Backport to 1.8  branch
+  - name: Backport to 1.9  branch
     conditions:
       - base=master
       - label=type/backport
     actions:
       backport:
         branches:
-          - '1.8'
+          - '1.9'
 
   - name: remove outdated reviews
     conditions:
-      - base~=^(master|1.8)$
+      - base~=^(master|1.9)$
     actions:
       dismiss_reviews:
         approved: True
