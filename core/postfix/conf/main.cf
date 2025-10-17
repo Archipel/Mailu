@@ -32,9 +32,17 @@ relayhost = {{ RELAYHOST }}
 {% if FALLBACK_RELAYHOST %}
 smtp_fallback_relay = {{ FALLBACK_RELAYHOST }}
 {% endif %}
-{% if RELAYUSER or FALLBACK_RELAYUSER or FALLBACK_RELAYHOST_SASL %}
+{% if SENDER_DEPENDENT_RELAYHOST_MAPS_MYSQL  %}
+sender_dependent_relayhost_maps  = mysql:/etc/postfix/mysql-sender_relay_hosts.cf
+{% endif %}
+{% if RELAYUSER or FALLBACK_RELAYUSER or FALLBACK_RELAYHOST_SASL or SMTP_SENDER_DEPENDENT_SASL_MYSQL %}
 smtp_sasl_auth_enable = yes
+{% if SMTP_SENDER_DEPENDENT_SASL_MYSQL %}
+smtp_sender_dependent_authentication = yes
+smtp_sasl_password_maps = mysql:/etc/postfix/mysql-sender_relay_hosts_auth.cf
+{% else %}
 smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd
+{% endif %}
 smtp_sasl_security_options = noanonymous, noplaintext
 smtp_sasl_tls_security_options = noanonymous
 {% endif %}
