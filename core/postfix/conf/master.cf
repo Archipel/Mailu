@@ -17,18 +17,19 @@ smtp      inet  n       -       n       -       -       smtpd
 # so they cannot pass the public listeners' relay restrictions ("554 Relay
 # access denied").
 #
-# Security note: mynetworks is scoped to the imap Service ClusterIP
-# (SIEVE_SMTP_MYNETWORKS, set in the configmap). The Service ClusterIP is
-# stable across pod restarts and uniquely identifies the dovecot submission
-# path, unlike the broad POD_ADDRESS_RANGE which would let any cluster pod
-# relay unauthenticated. NetworkPolicy is additionally applied but may not
-# be enforced on all cluster variants.
+# Security: NetworkPolicy (networkpolicy-smtp.yaml) gates this port to the
+# imap pods only. mynetworks is pod CIDR (necessary — the imap pod IP is
+# within the shared pod range and cannot be narrowed without enforced NP).
+# smtpd_recipient_limit=10 bounds the blast radius if a non-imap pod
+# circumvents the NetworkPolicy. A compromised pod already has authenticated
+# SASL relay access via 10025 anyway, so the marginal risk is low.
 10026     inet  n       -       n       -       -       smtpd
   -o smtpd_client_restrictions=permit_mynetworks,reject
   -o smtpd_relay_restrictions=permit_mynetworks,reject
   -o smtpd_recipient_restrictions=permit_mynetworks,reject
   -o smtpd_sender_restrictions=permit_mynetworks,reject
-  -o mynetworks=127.0.0.1/32,{{ SIEVE_SMTP_MYNETWORKS }}
+  -o mynetworks=127.0.0.1/32,{{ POD_ADDRESS_RANGE or SUBNET }}
+  -o smtpd_recipient_limit=10
   -o cleanup_service_name=outclean
 outclean  unix n       -       n       -       0       cleanup
   -o header_checks=pcre:/etc/postfix/outclean_header_filter.cf
