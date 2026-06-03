@@ -8,6 +8,7 @@ import multiprocessing
 import logging as log
 import sys
 import re
+from grp import getgrnam
 
 from podop import run_server
 from pwd import getpwnam
@@ -99,8 +100,6 @@ if "SIEVE_SMTP_AUTH_USER" in os.environ and "SIEVE_SMTP_AUTH_PASSWORD" in os.env
         input=pwd.encode(), check=True,
     )
     # postfix runs as uid postfix / gid mail — must be able to read the db.
-    from pwd import getpwnam
-    from grp import getgrnam
     os.chmod("/etc/postfix/sasldb2", 0o640)
     try:
         os.chown("/etc/postfix/sasldb2",
