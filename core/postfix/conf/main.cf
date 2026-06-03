@@ -14,7 +14,7 @@ queue_directory = /queue
 message_size_limit = {{ MESSAGE_SIZE_LIMIT }}
 
 # Relayed networks
-mynetworks = 127.0.0.1/32 [::1]/128 {{ SUBNET }}  {% if RELAYNETS %}{{ RELAYNETS.split(",") | join(' ') }}{% endif %}
+mynetworks = 127.0.0.1/32 [::1]/128 {{ SUBNET }} {% if POD_ADDRESS_RANGE %}{{ POD_ADDRESS_RANGE.split(",") | join(' ') }}{% endif %} {% if RELAYNETS %}{{ RELAYNETS.split(",") | join(' ') }}{% endif %}
 
 # Empty alias list to override the configuration variable and disable NIS
 alias_maps =
