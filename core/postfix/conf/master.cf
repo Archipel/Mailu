@@ -11,6 +11,22 @@ smtp      inet  n       -       n       -       -       smtpd
   -o smtpd_client_restrictions=$check_ratelimit,reject_unlisted_sender,permit
   -o smtpd_reject_unlisted_recipient={% if REJECT_UNLISTED_RECIPIENT %}{{ REJECT_UNLISTED_RECIPIENT }}{% else %}no{% endif %}
   -o cleanup_service_name=outclean
+
+# Trusted internal submission for dovecot sieve redirects (forwards). Dovecot
+# submits these unauthenticated with the ORIGINAL (external) envelope sender,
+# so they cannot pass the public listeners' relay restrictions ("554 Relay
+# access denied"). Reachability of this port is restricted to the imap pods
+# by a NetworkPolicy in mailu-kubernetes-config; the per-listener mynetworks
+# is belt-and-braces.
+# NOTE: POD_ADDRESS_RANGE must stay comma-separated WITHOUT spaces (master.cf
+# -o values cannot contain whitespace).
+10026     inet  n       -       n       -       -       smtpd
+  -o smtpd_client_restrictions=permit_mynetworks,reject
+  -o smtpd_relay_restrictions=permit_mynetworks,reject
+  -o smtpd_recipient_restrictions=permit_mynetworks,reject
+  -o smtpd_sender_restrictions=permit_mynetworks,reject
+  -o mynetworks=127.0.0.1/32,{{ POD_ADDRESS_RANGE or SUBNET }}
+  -o cleanup_service_name=outclean
 outclean  unix n       -       n       -       0       cleanup
   -o header_checks=pcre:/etc/postfix/outclean_header_filter.cf
   -o nested_header_checks=
