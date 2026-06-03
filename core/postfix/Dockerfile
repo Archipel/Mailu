@@ -27,9 +27,16 @@ RUN apk add --no-cache --virtual .build-deps gcc musl-dev python3-dev py3-wheel 
 # postfix-mysql: required by the SENDER_DEPENDENT_* mysql maps. It was present
 # in the deployed image but never committed here — without it postfix
 # temp-rejects all inbound with "unsupported dictionary type: mysql".
-RUN apk add --no-cache postfix postfix-mysql postfix-pcre cyrus-sasl-login rsyslog logrotate
+# cyrus-sasl: sasldb2 backend for smtpd inbound SASL auth (used by dovecot
+# sieve redirect to authenticate as the sieve relay user on port 10025)
+RUN apk add --no-cache postfix postfix-mysql postfix-pcre \
+    cyrus-sasl cyrus-sasl-login cyrus-sasl-crammd5 \
+    rsyslog logrotate
 
 COPY conf /conf
+# Cyrus SASL config for smtpd — sasldb2 is populated at startup by start.py
+# from SIEVE_SMTP_AUTH_USER / SIEVE_SMTP_AUTH_PASSWORD env vars.
+RUN mkdir -p /etc/sasl2 && cp /conf/sasl/smtpd.conf /etc/sasl2/smtpd.conf
 COPY start.py /start.py
 
 EXPOSE 25/tcp 10025/tcp

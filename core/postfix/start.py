@@ -3,6 +3,7 @@
 import os
 import glob
 import shutil
+import subprocess
 import multiprocessing
 import logging as log
 import sys
@@ -82,6 +83,21 @@ else:
 if not os.path.exists("/etc/postfix/tls_policy.map.lmdb"):
     open("/etc/postfix/tls_policy.map", "a").close()
     os.system("postmap /etc/postfix/tls_policy.map")
+
+# Populate Cyrus sasldb for smtpd inbound auth (used by dovecot sieve
+# redirects on port 10025). saslpasswd2 -c creates a new entry; -u sets
+# the realm. The sasldb lives at /etc/postfix/sasldb2 (outside the queue
+# chroot so postfix can read it without chroot issues).
+if "SIEVE_SMTP_AUTH_USER" in os.environ and "SIEVE_SMTP_AUTH_PASSWORD" in os.environ:
+    user = os.environ["SIEVE_SMTP_AUTH_USER"]
+    pwd  = os.environ["SIEVE_SMTP_AUTH_PASSWORD"]
+    # saslpasswd2 reads the password from stdin (-p). Using subprocess with a
+    # list avoids shell injection; credentials come from env vars, not user input.
+    subprocess.run(
+        ["saslpasswd2", "-p", "-c", "-f", "/etc/postfix/sasldb2", "-u", "localhost", user],
+        input=pwd.encode(), check=True,
+    )
+    os.chmod("/etc/postfix/sasldb2", 0o640)
 
 if "RELAYUSER" in os.environ:
     path = "/etc/postfix/sasl_passwd"
