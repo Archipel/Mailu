@@ -24,7 +24,10 @@ RUN apk add --no-cache --virtual .build-deps gcc musl-dev python3-dev py3-wheel 
   && pip3 install --no-binary :all: postfix-mta-sts-resolver==1.0.1 \
   && apk del .build-deps
 
-RUN apk add --no-cache postfix postfix-pcre cyrus-sasl-login rsyslog logrotate
+# postfix-mysql: required by the SENDER_DEPENDENT_* mysql maps. It was present
+# in the deployed image but never committed here — without it postfix
+# temp-rejects all inbound with "unsupported dictionary type: mysql".
+RUN apk add --no-cache postfix postfix-mysql postfix-pcre cyrus-sasl-login rsyslog logrotate
 
 COPY conf /conf
 COPY start.py /start.py
