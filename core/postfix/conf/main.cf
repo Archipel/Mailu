@@ -45,6 +45,9 @@ smtp_sasl_password_maps = lmdb:/etc/postfix/sasl_passwd
 {% endif %}
 smtp_sasl_security_options = noanonymous, noplaintext
 smtp_sasl_tls_security_options = noanonymous
+# Postal rejects CRAM-MD5 with "535 Denied"; Cyrus would otherwise prefer it
+# over PLAIN and the fallback relay becomes permanently unauthenticatable.
+smtp_sasl_mechanism_filter = plain, login
 {% endif %}
 
 # Recipient delimiter for extended addresses
