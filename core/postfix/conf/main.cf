@@ -50,6 +50,10 @@ smtp_sasl_tls_security_options = noanonymous
 smtp_sasl_mechanism_filter = plain, login
 {% endif %}
 
+# Strip foreign Mailgun sending-control headers from relayed mail, otherwise
+# Mailgun 421-rejects forwards of mail it originally sent (see filter file).
+smtp_header_checks = pcre:/etc/postfix/smtp_header_filter.cf
+
 # Recipient delimiter for extended addresses
 recipient_delimiter = {{ RECIPIENT_DELIMITER }}
 

@@ -1,0 +1,7 @@
+# Strip Mailgun sending-control headers from outbound relayed mail.
+# Forwarded messages that were originally delivered BY Mailgun carry
+# X-Mailgun-Sending-Ip; when relayed back out through our Mailgun account,
+# Mailgun obeys the header, sees an IP from another account and rejects with
+# "421 Rejected: IP x.x.x.x can't be used to send the message".
+# Proven A/B 2026-06-11 during the mailu relay incident.
+/^X-Mailgun-Sending-Ip:/i IGNORE
