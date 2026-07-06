@@ -1,0 +1,3 @@
+# The app/ tree is a byte-exact recovery of the deployed image; never
+# CRLF-normalize it on checkout or image builds would diverge from prod.
+* -text

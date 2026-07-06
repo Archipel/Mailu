@@ -61,6 +61,9 @@ DEFAULT_CONFIG = {
     'SESSION_KEY_BITS': 128,
     'SESSION_LIFETIME': 24,
     'SESSION_COOKIE_SECURE': True,
+    # CSRF tokens stay valid for the whole session; the flask-wtf default of
+    # 1 hour made form submissions from tabs older than an hour fail silently
+    'WTF_CSRF_TIME_LIMIT': None,
     'CREDENTIAL_ROUNDS': 12,
     # Host settings
     'HOST_IMAP': 'imap',

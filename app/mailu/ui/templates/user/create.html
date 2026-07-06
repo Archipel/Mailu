@@ -11,6 +11,9 @@
 {% block content %}
 <form class="form" method="post" role="form">
   {{ form.hidden_tag() }}
+  {% for error in form.csrf_token.errors %}
+  <div class="alert alert-danger">{{ error }} {% trans %}Nothing was saved — please reload the page and try again.{% endtrans %}</div>
+  {% endfor %}
 
   {% call macros.card(_("General")) %}
   {{ macros.form_field(form.localpart, append='<span class="input-group-text">@'+domain.name+'</span>') }}
