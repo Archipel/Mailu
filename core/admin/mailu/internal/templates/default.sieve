@@ -26,6 +26,12 @@ if spamtest :percent :value "gt" :comparator "i;ascii-numeric" "{{ user.spam_thr
   stop;
 }
 {% endif %}
+{% if user.forward_enabled %}
+{% for destination in user.forward_destination %}
+redirect "{{ destination }}";
+{% endfor %}
+{% if user.forward_keep %}keep;{% endif %}
+{% endif %}
 
 if exists "X-Virus" {
   discard;
