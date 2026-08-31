@@ -34,3 +34,18 @@ def test_every_destination_gets_its_own_redirect(app, make_user):
 def test_non_forwarding_user_gets_no_redirect(app, make_user):
     user = make_user("plain", "example.com")
     assert "redirect" not in render(user)
+
+
+def test_virus_is_discarded_before_any_redirect(app, make_user):
+    """RFC 5228 4.4: discard cancels only the IMPLICIT keep. An explicit
+    redirect placed before the X-Virus check still fires, so a virus would be
+    relayed onward under our IP and only the local copy dropped."""
+    user = make_user(
+        "virusfwd", "example.com",
+        forward_enabled=True,
+        forward_destination=["outside@gmail.com"],
+        forward_keep=True,
+    )
+    out = render(user)
+    assert 'redirect "outside@gmail.com";' in out
+    assert out.index('exists "X-Virus"') < out.index('redirect "outside@gmail.com"')
