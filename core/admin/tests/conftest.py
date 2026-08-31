@@ -88,6 +88,7 @@ os.environ.setdefault("SECRET_KEY", "test")
 os.environ.setdefault("DOMAIN", "example.com")
 os.environ.setdefault("HOSTNAMES", "mail.example.com")
 os.environ.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite://")
+os.environ.setdefault("RECIPIENT_DELIMITER", "+")
 
 
 @pytest.fixture
