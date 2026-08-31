@@ -41,3 +41,37 @@ Verify after rollout (from inside the admin pod): POST the user-edit form
 with a garbage `csrf_token` — the re-rendered page must contain an
 `alert-danger` block; a POST with a fresh token must still 302 to the user
 list.
+
+## Sieve-mediated forwarding patch (2026-08-31)
+
+Forwarding moved out of Postfix alias expansion and into the per-user sieve, so a
+spam verdict can gate the forward. An alias has no Junk folder, so previously spam
+addressed to a forwarder was relayed off-platform under our own IP — the traffic
+that got the Mailgun account disabled on 2026-08-25.
+
+Two files:
+
+- `app/mailu/models.py` — `User.resolve_destination` returns only the local mailbox
+  for a forwarding user, so Postfix delivers locally instead of expanding to the
+  off-platform address.
+- `app/mailu/internal/templates/default.sieve` — a `redirect` per destination, plus
+  `keep` when `forward_keep`, placed **after** both the spam stage and the `X-Virus`
+  check.
+
+The ordering is load-bearing. RFC 5228 §4.4: `discard` cancels only the *implicit*
+keep, not an explicit `redirect`. With the forward block above the virus check, an
+infected message would be redirected onward and only the local copy dropped.
+
+Why patched here rather than built from `master`: the fork's master is roughly five
+years ahead of this image (`models.py` alone differs by 1923 lines, and master
+carries an `sso/` package this tree does not have), so building from it would put
+five years of unrelated change in front of all mail. The deployed `default.sieve`
+and `resolve_destination` are functionally identical to master's for the parts being
+changed, so the patch applies cleanly to this tree. The equivalent change on master
+(`a72a2a2e`) carries unit tests for the spam-then-virus-then-redirect ordering.
+
+Verified before deploy: the rendered sieve for all 18 forwarding users compiles
+under `sievec` in the live imap pod — 18/18.
+
+Image: `europe-west1-docker.pkg.dev/shared-199814/tools/mailu-admin:b6744e37-csrf1-sieve1`
+Revert: re-pin `admin.yaml` to `weynwebworks/mailu-admin:b6744e37-csrf1`.

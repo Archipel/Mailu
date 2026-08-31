@@ -412,14 +412,13 @@ class Email(object):
         if user:
             email = f'{localpart}@{domain_name}'
 
-            if user.forward_enabled:
-                destination = user.forward_destination
-                if user.forward_keep or ignore_forward_keep:
-                    destination.append(email)
-            else:
-                destination = [email]
-
-            return destination
+            # Forwarding is sieve-mediated (see default.sieve): Postfix delivers
+            # locally and the user's sieve does the redirect, so the spam verdict
+            # can gate the forward. Returning the off-platform destination here
+            # would relay spam onward before any per-user rule has run -- which is
+            # exactly what got the upstream relay account disabled on 2026-08-25.
+            # ignore_forward_keep is honoured by the sieve's `keep`, not here.
+            return [email]
 
         pure_alias = Alias.resolve(localpart, domain_name)
 
