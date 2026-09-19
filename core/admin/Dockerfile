@@ -22,7 +22,12 @@ RUN set -eu \
 # Actual application
 FROM $DISTRO
 ARG VERSION
-COPY --from=balenalib/rpi-alpine:3.14 /usr/bin/qemu-arm-static /usr/bin/qemu-arm-static
+# Fully qualified on purpose: buildah/podman resolves `COPY --from=<name>` as a
+# BUILD STAGE name first and does not apply unqualified-search-registries to it,
+# so the short form fails with "no stage or image found with that name" even
+# though the FROM lines above resolve fine on the same engine. Docker accepts
+# the qualified form too, so this is safe for both.
+COPY --from=docker.io/balenalib/rpi-alpine:3.14 /usr/bin/qemu-arm-static /usr/bin/qemu-arm-static
 
 ENV TZ Etc/UTC
 
