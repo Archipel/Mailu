@@ -1,79 +1,93 @@
-# NOTE: only add qemu-arm-static if building for arm
-ARG ARCH=""
-ARG QEMU=other
-FROM ${ARCH}php:8.0-apache as build_arm
-ONBUILD COPY --from=balenalib/rpi-alpine:3.14 /usr/bin/qemu-arm-static /usr/bin/qemu-arm-static
-FROM ${ARCH}php:8.0-apache as build_other
+# Roundcube 1.6 on Debian trixie + PHP from packages.sury.org (mod_php, prefork).
+#
+# Why not php:8.x-apache: on 2026-10-21 the official images were still on
+# 8.3.35 / 8.4.26 (vulnerable to CVE-2026-109618/109619) while sury already
+# shipped 8.3.36. The build refuses any PHP older than MIN_PHP_VERSION, so a
+# rebuild can never silently go back to a vulnerable release.
+FROM debian:trixie-20261020-slim
 
-
-FROM build_${QEMU}
 ARG VERSION
-ENV TZ Etc/UTC
+ARG PHP=8.3
+ARG MIN_PHP_VERSION=8.3.36
+ARG ROUNDCUBE_VERSION=1.6.20
+ARG ROUNDCUBE_SHA256=46919c70c85609b57038903c4ecc4e1d7fa4e14c535fe5b14192d778dcd4a1ee
+ARG CARDDAV_VERSION=5.1.4
+ARG CARDDAV_SHA256=0ffa55ec6da5671d6c413a27d2511e903cd4e63de03c3e9480038844fa4625eb
 
-LABEL version=$VERSION
+ENV TZ=Etc/UTC \
+    PHP_VERSION=${PHP} \
+    DEBIAN_FRONTEND=noninteractive
 
-RUN set -eu \
- && apt update \
- && echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections \
- && apt install -y --no-install-recommends \
-      python3 curl python3-pip git python3-multidict \
-      python3-jinja2 gpg gpg-agent tzdata \
- && pip3 install socrate \
- && echo date.timezone=UTC > /usr/local/etc/php/conf.d/timezone.ini \
- && echo "ServerSignature Off\nServerName roundcube" >> /etc/apache2/apache2.conf \
- && sed -i 's,CustomLog.*combined$,\0 "'"expr=!(%{HTTP_USER_AGENT}=='health'\&\&(-R '127.0.0.1/8' || -R '::1'))"'",' /etc/apache2/sites-available/000-default.conf \
-\
- && mark="$(apt-mark showmanual)" \
- && apt install -y --no-install-recommends \
-      libfreetype6-dev libicu-dev libjpeg62-turbo-dev libldap2-dev libmagickwand-dev \
-      libpng-dev libpq-dev libsqlite3-dev libzip-dev libpspell-dev libonig-dev \
- && ln -s php.ini-production /usr/local/etc/php/php.ini \
- && docker-php-ext-configure gd --with-jpeg --with-freetype \
- && docker-php-ext-install exif gd intl zip pspell pdo_mysql pdo_pgsql pdo_sqlite \
- && pecl install imagick \
- && docker-php-ext-enable imagick opcache \
- && apt-mark auto '.*' >/dev/null \
- && apt-mark manual ${mark} >/dev/null \
- && ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so | awk '/=>/ { print $3 }' | sort -u | \
-    xargs -r dpkg-query -S | cut -d: -f1 | sort -u | xargs -r apt-mark manual >/dev/null \
- && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
- && rm -rf /var/lib/apt/lists
-
-ENV ROUNDCUBE_URL https://github.com/roundcube/roundcubemail/releases/download/1.5.2/roundcubemail-1.5.2-complete.tar.gz
-ENV CARDDAV_URL https://github.com/mstilkerich/rcmcarddav/releases/download/v4.3.0/carddav-v4.3.0.tar.gz
+LABEL version=$VERSION \
+      org.opencontainers.image.title="mailu-roundcube" \
+      roundcube.version=$ROUNDCUBE_VERSION \
+      carddav.version=$CARDDAV_VERSION
 
 RUN set -eu \
- && rm -rf /var/www/html/ \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && curl -fsSLo /tmp/sury.deb https://packages.sury.org/debsuryorg-archive-keyring.deb \
+ && dpkg -i /tmp/sury.deb && rm /tmp/sury.deb \
+ && echo "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ trixie main" \
+      > /etc/apt/sources.list.d/php.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      apache2 libapache2-mod-php${PHP} \
+      php${PHP}-cli php${PHP}-intl php${PHP}-mbstring php${PHP}-xml php${PHP}-zip \
+      php${PHP}-gd php${PHP}-curl php${PHP}-mysql php${PHP}-pgsql php${PHP}-sqlite3 \
+      php${PHP}-ldap php${PHP}-imagick php${PHP}-opcache \
+      python3 python3-jinja2 gpg gpg-agent tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && php -r "exit(version_compare(PHP_VERSION, '${MIN_PHP_VERSION}', '>=') ? 0 : 1);" \
+    || { echo "PHP $(php -r 'echo PHP_VERSION;') < ${MIN_PHP_VERSION}: refusing to build" >&2; exit 1; }
+
+# PHP settings shared by apache2 and cli. 99z-* is the CVE-2026-109618
+# defense in depth: upload progress tracking is not used by Roundcube.
+COPY php-hardening.ini /tmp/
+RUN set -eu \
+ && for sapi in apache2 cli; do \
+      cp /tmp/php-hardening.ini /etc/php/${PHP}/${sapi}/conf.d/99z-cve-2026-109618.ini; \
+      ln -sf /etc/php/${PHP}/roundcube.ini /etc/php/${PHP}/${sapi}/conf.d/90-roundcube.ini; \
+    done \
+ && rm /tmp/php-hardening.ini
+
+# Apache: serve public_html only (config/, logs/, temp/ are not web-reachable),
+# log to the container's stdout/stderr, skip local health probes in the access log.
+COPY apache-roundcube.conf /etc/apache2/sites-available/000-default.conf
+RUN set -eu \
+ && a2enmod rewrite deflate expires headers \
+ && a2disconf other-vhosts-access-log \
+ && echo "ServerSignature Off\nServerTokens Prod\nServerName roundcube" >> /etc/apache2/apache2.conf \
+ && ln -sfT /dev/stderr /var/log/apache2/error.log \
+ && ln -sfT /dev/stdout /var/log/apache2/access.log
+
+RUN set -eu \
+ && rm -rf /var/www/html \
  && cd /var/www \
- && curl -sL ${ROUNDCUBE_URL} | tar xz \
- && curl -sL ${CARDDAV_URL} | tar xz \
- && mv roundcubemail-* html \
+ && curl -fsSLo rc.tgz https://github.com/roundcube/roundcubemail/releases/download/${ROUNDCUBE_VERSION}/roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz \
+ && echo "${ROUNDCUBE_SHA256}  rc.tgz" | sha256sum -c - \
+ && curl -fsSLo carddav.tgz https://github.com/mstilkerich/rcmcarddav/releases/download/v${CARDDAV_VERSION}/carddav-v${CARDDAV_VERSION}.tar.gz \
+ && echo "${CARDDAV_SHA256}  carddav.tgz" | sha256sum -c - \
+ && tar xzf rc.tgz && tar xzf carddav.tgz && rm rc.tgz carddav.tgz \
+ && mv roundcubemail-${ROUNDCUBE_VERSION} html \
  && mv carddav html/plugins/ \
  && cd html \
- && rm -rf CHANGELOG.md SECURITY.md INSTALL LICENSE README.md UPGRADING composer.json-dist installer composer.* \
- && ln -sf index.php /var/www/html/sso.php \
- && ln -sf /dev/stderr /var/www/html/logs/errors.log \
+ && rm -rf CHANGELOG.md SECURITY.md INSTALL LICENSE README.md UPGRADING composer.json-dist installer \
+ && rm -rf plugins/autologon plugins/example_addressbook plugins/http_authentication plugins/krb_authentication \
+           plugins/squirrelmail_usercopy plugins/virtuser_file plugins/virtuser_query \
  && chown -R root:root . \
  && chown www-data:www-data logs temp \
- && chmod -R a+rX . \
- && a2enmod rewrite deflate expires headers \
- && echo date.timezone=${TZ} > /usr/local/etc/php/conf.d/timezone.ini \
- && rm -rf plugins/{autologon,example_addressbook,http_authentication,krb_authentication,new_user_identity,password,redundant_attachments,squirrelmail_usercopy,userinfo,virtuser_file,virtuser_query}
-
-# enable database_attachments (and memcache?)
+ && chmod -R a+rX .
 
 COPY mailu.php /var/www/html/plugins/mailu/mailu.php
-COPY php.ini /
-COPY config.inc.php /
-COPY start.py /
-COPY config.inc.carddav.php /var/www/html/plugins/carddav/config.inc.php
+COPY config.inc.php config.inc.carddav.php php.ini start.py healthcheck.sh /
 
 EXPOSE 80/tcp
 VOLUME /data
 VOLUME /overrides
 
-CMD /start.py
+CMD ["/start.py"]
 
-HEALTHCHECK CMD curl -f -L -H 'User-Agent: health' http://localhost/ || exit 1
+HEALTHCHECK CMD /healthcheck.sh
 
 RUN echo $VERSION >> /version
