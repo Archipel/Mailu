@@ -21,6 +21,8 @@
   {{ macros.form_field(form.spam_threshold, step=1, max=100,
       prepend='<span class="input-group-text"><span id="threshold">'+form.spam_threshold.data.__str__()+'</span>&nbsp;/&nbsp;100</span>',
       oninput='$("#threshold").text(this.value);') }}
+  {{ macros.form_field(form.spam_allowlist, rows=6) }}
+  <p class="help-block">{{ form.spam_allowlist.description }}</p>
   {% endcall %}
 
   {% call macros.card(title=_("Auto-forward")) %}

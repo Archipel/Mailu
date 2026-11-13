@@ -10,3 +10,13 @@ COPY app/mailu/ui/templates/user/create.html /app/mailu/ui/templates/user/create
 # purge above: a stale models.pyc would shadow the patched models.py.
 COPY app/mailu/models.py /app/mailu/models.py
 COPY app/mailu/internal/templates/default.sieve /app/mailu/internal/templates/default.sieve
+
+# Per-user spam allowlist + DEFAULT_SPAM_THRESHOLD overlay (2026-11-13) - see
+# README.md. models.py, configuration.py and default.sieve above already carry
+# their part; the migration adds user.spam_allowlist on `flask db upgrade`.
+COPY app/mailu/internal/views/dovecot.py /app/mailu/internal/views/dovecot.py
+COPY app/mailu/schemas.py /app/mailu/schemas.py
+COPY app/mailu/ui/forms.py /app/mailu/ui/forms.py
+COPY app/mailu/ui/views/users.py /app/mailu/ui/views/users.py
+COPY app/mailu/ui/templates/user/settings.html /app/mailu/ui/templates/user/settings.html
+COPY app/migrations/versions/7d2f1c0a9b31_spam_allowlist.py /app/migrations/versions/7d2f1c0a9b31_spam_allowlist.py

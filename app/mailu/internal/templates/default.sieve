@@ -19,7 +19,27 @@ if header :index 2 :matches "Received" "from * by * for <*>; *"
 }
 
 {% if user.spam_enabled %}
-if spamtest :percent :value "gt" :comparator "i;ascii-numeric"  "{{ user.spam_threshold }}"
+{#- Per-user allowlist: never file an allowlisted sender into Junk, but only
+    when rspamd's own DMARC check passed. X-Mailu-DMARC is set by rspamd
+    (milter_headers.conf, custom routine) after removing any copy the message
+    arrived with; it must not be read from Authentication-Results, whose spf
+    clause quotes the sender-controlled envelope sender. Entries are validated
+    in User.normalize_allowlist_entry, so they cannot break out of a string. #}
+{%- set allow_addresses = user.spam_allowlist_addresses %}
+{%- set allow_domains = user.spam_allowlist_domains %}
+{%- if allow_addresses or allow_domains %}
+if allof(header :matches "X-Mailu-DMARC" "pass *",
+         anyof({%- if allow_addresses %}address :is :all "from" [{% for a in allow_addresses %}"{{ a }}"{{ ", " if not loop.last }}{% endfor %}]{% endif %}
+               {%- if allow_addresses and allow_domains %},
+               {% endif %}{%- if allow_domains %}address :is :domain "from" [{% for d in allow_domains %}"{{ d }}"{{ ", " if not loop.last }}{% endfor %}]{% endif %}))
+{
+  set "spam_allowlisted" "1";
+  addheader "X-Mailu-Allowlisted" "yes";
+}
+{%- endif %}
+
+if allof(not string :is "${spam_allowlisted}" "1",
+         spamtest :percent :value "gt" :comparator "i;ascii-numeric" "{{ user.spam_threshold }}")
 {
   setflag "\\seen";
   fileinto :create "Junk";

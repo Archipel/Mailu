@@ -75,3 +75,24 @@ under `sievec` in the live imap pod — 18/18.
 
 Image: `europe-west1-docker.pkg.dev/shared-199814/tools/mailu-admin:b6744e37-csrf1-sieve1`
 Revert: re-pin `admin.yaml` to `weynwebworks/mailu-admin:b6744e37-csrf1`.
+
+## Per-user spam allowlist + DEFAULT_SPAM_THRESHOLD (2026-11-13)
+
+Deployed as `europe-west1-docker.pkg.dev/shared-199814/tools/mailu-admin:b6744e37-csrf1-sieve1-allow1`
+together with `mailu-imap:git-1b4509e1-allow1` (`core/dovecot/Dockerfile.overlay` on
+branch `feat/spam-allowlist`) and rspamd's `milter_headers.conf` custom routine
+`x-mailu-dmarc` (servertools `mailu/rspamd-local-d/`).
+
+- `user.spam_allowlist` (migration `7d2f1c0a9b31`; **run `flask db upgrade` by hand**:
+  this image does not migrate on start). Edited on the user settings page, one
+  address or domain per line; `User.normalize_allowlist_entry` refuses anything that
+  could break out of a sieve string.
+- `default.sieve` skips the Junk rule when From is allowlisted **and** the message
+  carries `X-Mailu-DMARC: pass …`. rspamd sets that header after stripping every copy
+  the message arrived with. Authentication-Results is deliberately not parsed: its spf
+  clause quotes the sender-controlled envelope sender.
+- `POST /internal/dovecot/allowlist/<add|remove>/<user>`: called by the imapsieve
+  hook (moved out of Junk = add, into Junk = remove). Signed with HMAC-SHA256 under
+  `hmac(SECRET_KEY, "mailu-allowlist")`, 5-minute window; /internal itself has no auth.
+- `DEFAULT_SPAM_THRESHOLD` (env, default 80) for new users; prod sets 40 in
+  `mailu-config`.

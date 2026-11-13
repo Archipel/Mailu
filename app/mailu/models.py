@@ -2,6 +2,7 @@
 """
 
 import os
+import re
 import smtplib
 import json
 
@@ -469,7 +470,53 @@ class User(Base, Email):
     # Settings
     displayed_name = db.Column(db.String(160), nullable=False, default='')
     spam_enabled = db.Column(db.Boolean, nullable=False, default=True)
-    spam_threshold = db.Column(db.Integer, nullable=False, default=80)
+    spam_threshold = db.Column(db.Integer, nullable=False,
+        default=lambda: int(app.config['DEFAULT_SPAM_THRESHOLD']))
+    # Senders whose mail never goes to Junk for this user (addresses or bare
+    # domains, lower case). Only honoured when DMARC passes; see default.sieve.
+    spam_allowlist = db.Column(CommaSeparatedList, nullable=True, default=list)
+
+    SPAM_ALLOWLIST_MAX = 500
+    _ALLOW_ADDRESS = re.compile(r'^[^@\s",;\\<>()\[\]]+@[a-z0-9-]+(\.[a-z0-9-]+)+$')
+    _ALLOW_DOMAIN = re.compile(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$')
+
+    @classmethod
+    def normalize_allowlist_entry(cls, value):
+        """ return a lower-case sender address or bare domain, or None when
+        the value is neither. The result is rendered into a sieve string, so
+        anything that could break out of one (quotes, backslashes) is refused.
+        """
+        value = (value or '').strip().lower()
+        if value.startswith('@'):
+            value = value[1:]
+        if cls._ALLOW_ADDRESS.match(value) or cls._ALLOW_DOMAIN.match(value):
+            return value
+        return None
+
+    @property
+    def spam_allowlist_addresses(self):
+        return [item for item in (self.spam_allowlist or []) if '@' in item]
+
+    @property
+    def spam_allowlist_domains(self):
+        return [item for item in (self.spam_allowlist or []) if '@' not in item]
+
+    def allowlist_update(self, action, sender):
+        """ add or remove one sender; returns True when the list changed """
+        entry = self.normalize_allowlist_entry(sender)
+        if entry is None:
+            raise ValueError('not an e-mail address or domain')
+        current = list(self.spam_allowlist or [])
+        if action == 'add' and entry not in current:
+            if len(current) >= self.SPAM_ALLOWLIST_MAX:
+                raise ValueError('allowlist is full')
+            self.spam_allowlist = current + [entry]
+            return True
+        if action == 'remove' and entry in current:
+            self.spam_allowlist = [item for item in current if item != entry]
+            return True
+        return False
+
 
     # Flask-login attributes
     is_authenticated = True
