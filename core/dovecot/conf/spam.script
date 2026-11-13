@@ -9,5 +9,6 @@ fi
 
 
 tee >(rspamc -h $RSPAMD_HOST -P mailu learn_spam /dev/stdin) \
+    >(/conf/bin/allowlist remove "$1") \
     >(rspamc -h $RSPAMD_HOST -P mailu -f 13 fuzzy_del /dev/stdin) \
     | rspamc -h $RSPAMD_HOST -P mailu -f 11 fuzzy_add /dev/stdin

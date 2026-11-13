@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     'DKIM_SELECTOR': 'dkim',
     'DKIM_PATH': '/dkim/{domain}.{selector}.key',
     'DEFAULT_QUOTA': 1000000000,
+    'DEFAULT_SPAM_THRESHOLD': 80,
     'MESSAGE_RATELIMIT': '10000/day',
     'MESSAGE_RATELIMIT_EXEMPTION': '',
     'RECIPIENT_DELIMITER': '',

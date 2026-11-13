@@ -41,6 +41,19 @@ class MultipleEmailAddressesVerify(object):
         if not pattern.match(field.data.replace(" ", "")):
             raise validators.ValidationError(self.message)
 
+class SpamAllowlistVerify(object):
+    def __init__(self, message=_('One e-mail address or domain per line.')):
+        self.message = message
+
+    def __call__(self, form, field):
+        from mailu.models import User
+        entries = [line for line in (field.data or '').replace(',', '\n').splitlines() if line.strip()]
+        if len(entries) > User.SPAM_ALLOWLIST_MAX:
+            raise validators.ValidationError(_('At most %(n)s senders.', n=User.SPAM_ALLOWLIST_MAX))
+        bad = [entry.strip() for entry in entries if User.normalize_allowlist_entry(entry) is None]
+        if bad:
+            raise validators.ValidationError('%s: %s' % (self.message, ', '.join(bad[:5])))
+
 class ConfirmationForm(flask_wtf.FlaskForm):
     submit = fields.SubmitField(_('Confirm'))
 
@@ -101,6 +114,11 @@ class UserSettingsForm(flask_wtf.FlaskForm):
     displayed_name = fields.StringField(_('Displayed name'))
     spam_enabled = fields.BooleanField(_('Enable spam filter'))
     spam_threshold = fields_.IntegerSliderField(_('Spam filter tolerance'))
+    spam_allowlist = fields.TextAreaField(_('Never send mail from these senders to Junk'),
+        [validators.Optional(), SpamAllowlistVerify()],
+        description=_('One address (news@example.com) or domain (example.com) per line. '
+                      'Only applies when the sender passes DMARC. Moving a message out of '
+                      'Junk adds its sender; moving one into Junk removes it.'))
     forward_enabled = fields.BooleanField(_('Enable forwarding'))
     forward_keep = fields.BooleanField(_('Keep a copy of the emails'))
     forward_destination = fields.StringField(_('Destination'), [validators.Optional(), MultipleEmailAddressesVerify()])

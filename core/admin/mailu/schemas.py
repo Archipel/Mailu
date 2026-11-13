@@ -1169,6 +1169,7 @@ class UserSchema(BaseSchema):
         primary_keys = ['email']
         exclude_by_value = {
             'forward_destination': [[]],
+            'spam_allowlist':      [[]],
             'tokens':              [[]],
             'fetches':             [[]],
             'manager_of':          [[]],
@@ -1178,6 +1179,7 @@ class UserSchema(BaseSchema):
 
     email = fields.String(required=True)
     tokens = fields.Nested(TokenSchema, many=True)
+    spam_allowlist = CommaSeparatedListField()
     fetches = fields.Nested(FetchSchema, many=True)
 
     password = PasswordField(required=True, metadata={'model': models.User})

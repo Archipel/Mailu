@@ -5,6 +5,9 @@ from flask import current_app as app
 import flask
 import socket
 import os
+import hashlib
+import hmac
+import time
 
 @internal.route("/dovecot/passdb/<path:user_email>")
 def dovecot_passdb_dict(user_email):
@@ -48,3 +51,38 @@ def dovecot_sieve_name(script, user_email):
 def dovecot_sieve_data(user_email):
     user = models.User.query.get(user_email) or flask.abort(404)
     return flask.jsonify(flask.render_template("default.sieve", user=user))
+
+
+def _allowlist_key():
+    """ the key the imap container derives in core/dovecot/start.py """
+    return hmac.new(app.config["SECRET_KEY"].encode(), b"mailu-allowlist",
+                    hashlib.sha256).hexdigest().encode()
+
+
+@internal.route("/dovecot/allowlist/<action>/<path:user_email>", methods=["POST"])
+def dovecot_allowlist(action, user_email):
+    """ Add or remove one sender on a user's spam allowlist. Called by the
+    imapsieve hook when a message is moved out of (add) or into (remove)
+    Junk. /internal has no authentication of its own and is reachable from
+    any pod, so this write path is signed with a key derived from SECRET_KEY
+    and limited to a 5-minute window.
+    """
+    if action not in ("add", "remove"):
+        flask.abort(404)
+    sender = flask.request.get_data(as_text=True).strip()
+    stamp = flask.request.headers.get("X-Mailu-Timestamp", "")
+    signature = flask.request.headers.get("X-Mailu-Signature", "")
+    if not stamp.isdigit() or abs(time.time() - int(stamp)) > 300:
+        flask.abort(403)
+    expected = hmac.new(_allowlist_key(), "\n".join((action, user_email, sender, stamp)).encode(),
+                        hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        flask.abort(403)
+    user = models.User.query.get(user_email) or flask.abort(404)
+    try:
+        changed = user.allowlist_update(action, sender)
+    except ValueError as exc:
+        return flask.jsonify({"error": str(exc)}), 400
+    if changed:
+        models.db.session.commit()
+    return flask.jsonify({"changed": changed})

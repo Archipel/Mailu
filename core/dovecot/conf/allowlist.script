@@ -1,0 +1,34 @@
+#!/usr/bin/python3
+# Per-user spam allowlist hook, called from ham/spam (imapsieve) with the
+# moved message on stdin:  allowlist add|remove <user>
+# "add" (moved out of Junk) only records senders whose mail passed rspamd's
+# DMARC check (X-Mailu-DMARC), because default.sieve ignores the allowlist for
+# anything else. Failures are logged and swallowed: learning must never break
+# an IMAP move.
+import email.parser, email.utils, hashlib, hmac, sys, time, urllib.parse, urllib.request
+
+ADMIN = "http://{{ ADMIN_ADDRESS }}/internal/dovecot/allowlist"
+
+def main():
+    action, user = sys.argv[1], sys.argv[2]
+    msg = email.parser.BytesHeaderParser().parse(sys.stdin.buffer)
+    if action == "add" and not str(msg.get("X-Mailu-DMARC", "")).startswith("pass "):
+        return
+    senders = [addr for _, addr in email.utils.getaddresses(msg.get_all("From", [])) if addr]
+    if len(senders) != 1:
+        return
+    sender = senders[0].lower()
+    with open("/conf/allowlist.key", "rb") as f:
+        key = f.read().strip()
+    ts = str(int(time.time()))
+    sig = hmac.new(key, "\n".join((action, user, sender, ts)).encode(), hashlib.sha256).hexdigest()
+    req = urllib.request.Request(
+        "%s/%s/%s" % (ADMIN, action, urllib.parse.quote(user)),
+        data=sender.encode(), method="POST",
+        headers={"X-Mailu-Timestamp": ts, "X-Mailu-Signature": sig})
+    urllib.request.urlopen(req, timeout=10).read()
+
+try:
+    main()
+except Exception as exc:  # noqa: BLE001 - see header
+    print("allowlist: %s" % exc, file=sys.stderr)

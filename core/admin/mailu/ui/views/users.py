@@ -96,11 +96,17 @@ def user_settings(user_email):
     else:
         data = form.forward_destination.data
     form.forward_destination.data = ", ".join(data)
+    if not form.is_submitted():
+        form.spam_allowlist.data = "\n".join(user.spam_allowlist or [])
     if form.validate_on_submit():
         form.forward_destination.data = form.forward_destination.data.replace(" ","").split(",")
+        allowlist = (form.spam_allowlist.data or '').replace(',', '\n').splitlines()
+        form.spam_allowlist.data = sorted({entry for entry in
+            map(models.User.normalize_allowlist_entry, allowlist) if entry})
         form.populate_obj(user)
         models.db.session.commit()
         form.forward_destination.data = ", ".join(form.forward_destination.data)
+        form.spam_allowlist.data = "\n".join(user.spam_allowlist or [])
         flask.flash('Settings updated for %s' % user)
         if user_email:
             return flask.redirect(

@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import os
+import hmac
+import hashlib
 import glob
 import multiprocessing
 import logging as log
@@ -33,6 +35,13 @@ for script_file in glob.glob("/conf/*.script"):
     out_file = os.path.join("/conf/bin/", os.path.basename(script_file).replace('.script',''))
     conf.jinja(script_file, os.environ, out_file)
     os.chmod(out_file, 0o555)
+
+# Key for the per-user allowlist hook (allowlist.script -> admin). Derived
+# from SECRET_KEY the same way mailu/internal/views/dovecot.py does, so the
+# raw SECRET_KEY is not written to disk; readable by the mail user only.
+with open("/conf/allowlist.key", "w") as handle:
+    handle.write(hmac.new(os.environ["SECRET_KEY"].encode(), b"mailu-allowlist", hashlib.sha256).hexdigest())
+os.chmod("/conf/allowlist.key", 0o400)
 
 # Run Podop, then postfix
 multiprocessing.Process(target=start_podop).start()
