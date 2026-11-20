@@ -1,7 +1,7 @@
 # Overlay on the deployed imap image: per-user spam allowlist hook (2026-11-13).
 # Built as an overlay because the deployed image's dovecot.conf is not the one
 # on master; only the files below change.
-#   podman build --format docker -f Dockerfile.overlay -t <AR>/mailu-imap:git-1b4509e1-allow1 .
+#   podman build --format docker -f Dockerfile.overlay -t <AR>/mailu-imap:git-1b4509e1-allow2 .
 FROM docker.io/weynwebworks/mailu-imap:git-1b4509e1-1780571887
 COPY start.py /start.py
 COPY conf/allowlist.script conf/ham.script conf/spam.script conf/report-ham.sieve conf/report-spam.sieve /conf/
